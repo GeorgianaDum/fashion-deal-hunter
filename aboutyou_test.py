@@ -82,5 +82,8 @@ try:
     print("No prices extracted.")
     print("products.json unchanged.")
 
-except (HTTPError, URLError, TimeoutError) as error:
+except HTTPError as error:
+    print("Access failed. HTTP status:", error.code)
+
+except (URLError, TimeoutError) as error:
     print("Access failed:", type(error).__name__)
