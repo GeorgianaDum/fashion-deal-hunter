@@ -38,3 +38,5 @@ jobs:
           print(f"Catalog valid. Produse existente: {len(products)}")
           print("Nu au fost adaugate produse fictive.")
           PY
+      - name: Testeaza accesul la ABOUT YOU
+        run: python aboutyou_test.py
