@@ -1,41 +1,50 @@
 
-import json
-from html.parser import HTMLParser
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from html.parser import HTMLParser
 
 URL = (
-    "https://www.aboutyou.ro/p/jdy/"
-    "geaca-de-primavara-toamna-jdyraya-29565109"
+    "https://www.mangooutlet.com/ro/ro/p/femei/"
+    "paltoane/geaca-parka-cu-buzunare-si-guler-inalt/"
+    "77947938/35/00"
 )
 
-class JSONInspector(HTMLParser):
+class Inspector(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.capturing = False
-        self.parts = []
-        self.scripts = []
+        self.title = ""
+        self.in_title = False
+        self.metadata = []
+        self.json_ld = 0
 
     def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "title":
+            self.in_title = True
+        if tag == "meta":
+            key = attrs.get("property") or attrs.get("name")
+            if key and (
+                key.startswith("og:")
+                or key.startswith("product:")
+                or key == "description"
+            ):
+                self.metadata.append(
+                    (key, attrs.get("content", "")[:160])
+                )
         if tag == "script":
-            attributes = dict(attrs)
-            self.capturing = (
-                attributes.get("type", "").lower()
-                == "application/json"
-            )
-            self.parts = []
-
-    def handle_data(self, data):
-        if self.capturing:
-            self.parts.append(data)
+            if attrs.get("type") == "application/ld+json":
+                self.json_ld += 1
 
     def handle_endtag(self, tag):
-        if tag == "script" and self.capturing:
-            self.scripts.append("".join(self.parts))
-            self.capturing = False
+        if tag == "title":
+            self.in_title = False
+
+    def handle_data(self, data):
+        if self.in_title:
+            self.title += data
 
 
-print("ABOUT YOU - diagnostic JSON")
+print("MANGO OUTLET - diagnostic produs")
 
 try:
     request = Request(
@@ -44,42 +53,30 @@ try:
             "User-Agent": "FashionDealHunterDiagnostic/1.0"
         }
     )
-
     with urlopen(request, timeout=20) as response:
         html = response.read(2_000_000).decode(
             "utf-8", errors="replace"
         )
         print("HTTP status:", response.status)
+        print("Final URL:", response.url)
 
-    inspector = JSONInspector()
+    inspector = Inspector()
     inspector.feed(html)
 
-    print("JSON scripts found:", len(inspector.scripts))
+    print("HTML characters:", len(html))
+    print("Page title:", inspector.title.strip()[:200])
+    print("JSON-LD blocks:", inspector.json_ld)
 
-    for index, raw in enumerate(inspector.scripts, start=1):
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            print(f"Script {index}: invalid JSON")
-            continue
+    print("\nPublic metadata:")
+    for key, value in inspector.metadata[:15]:
+        print(key, ":", value)
 
-        print(f"\nScript {index}")
-        print("Root type:", type(data).__name__)
-
-        if isinstance(data, dict):
-            print("Top-level keys:", list(data.keys())[:15])
-
-        elif isinstance(data, list):
-            print("List length:", len(data))
-
-        print(
-            "Contains product ID:",
-            "29565109" in raw
-        )
-        print(
-            "Contains product name:",
-            "JDYRAYA" in raw.upper()
-        )
+    print("\nProduct indicators:")
+    for term in (
+        "77947938", "geacă parka",
+        "price", "availability", "RON"
+    ):
+        print(term, ":", term.lower() in html.lower())
 
     print("\nDiagnostic only.")
     print("No prices extracted.")
